@@ -5,6 +5,7 @@
 ## 笔记列表
 
 - **[Claude Code 常用命令速查](./claude-code-commands)** — 日常高频命令、会话内操作、Verilog 开发常用组合
+- **[如何与 Claude Code 配合越来越默契](./better-collaboration)** — CLAUDE.md 编写、Memory 使用、反馈技巧、分步推进
 
 > 每次有新的经验只需在 `docs/notes/` 下新建 `.md` 文件即可。
 
