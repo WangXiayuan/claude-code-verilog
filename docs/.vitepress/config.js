@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
+  base: '/claude-code-verilog/',
   lang: 'zh-CN',
   title: 'Claude Code × Verilog',
   description: '使用 Claude Code 进行 Verilog 开发的完全指南',
