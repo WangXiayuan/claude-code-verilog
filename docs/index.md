@@ -10,7 +10,7 @@ hero:
       text: 快速开始
       link: /guide/getting-started
     - theme: alt
-      text: 查看心得
+      text: 查看笔记
       link: /notes/
 
 features:
