@@ -364,10 +364,13 @@
   function setupCtx(canvas) {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth, h = +canvas.getAttribute('height');
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return {ctx, w, h};
   }
 
