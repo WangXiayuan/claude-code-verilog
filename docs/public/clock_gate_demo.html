@@ -332,14 +332,10 @@
   }
 
   function latchQ(t) {
-    const st = (t + _ofs) % T_END;
-    if (((st % CLK_PERIOD) + CLK_PERIOD) % CLK_PERIOD < DUTY === false) return en(t); // clk=0 → transparent
-    const edge = Math.floor(st / CLK_PERIOD) * CLK_PERIOD;
-    if (edge < 0) return 0;
-    // value of en at the last rising edge
-    let v = 0;
-    for (const e of EN_EVENTS) { if (edge >= e.t) v = e.v; }
-    return v;
+    if (clk(t) === 0) return en(t);
+    // most recent 0→1 edge of shifted clock: (t+_ofs) % CLK_PERIOD == 0
+    const edge = Math.floor((t + _ofs) / CLK_PERIOD) * CLK_PERIOD - _ofs;
+    return edge < 0 ? 0 : en(edge);
   }
 
   // detect narrow pulses (< DUTY - 0.5ns) in a signal sampled at given step
