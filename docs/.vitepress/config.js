@@ -10,6 +10,7 @@ export default defineConfig({
     nav: [
       { text: '指南', link: '/guide/getting-started' },
       { text: '心得笔记', link: '/notes/' },
+      { text: 'Clock Gate 演示', link: '/clock_gate_demo.html' },
     ],
 
     sidebar: {
