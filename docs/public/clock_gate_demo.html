@@ -95,6 +95,8 @@
     border-radius: 6px;
     margin-bottom: 12px;
     background: #0d1117;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 
   .legend {
@@ -467,78 +469,80 @@
   }
 
   // ============================================================
-  //  Animation (scroll static scene horizontally)
+  //  Animation — single rAF loop driving both panels
   // ============================================================
-  function startAnim(canvasId, speedId, btnId, countId, renderFn) {
+  const panels = [];
+
+  function makePanel(canvasId, speedId, btnId, countId, renderFn) {
     const canvas = document.getElementById(canvasId);
     const speedEl = document.getElementById(speedId);
     const btn = document.getElementById(btnId);
     const countEl = countId ? document.getElementById(countId) : null;
-    let running = true, speed = 1, offset = 0, lastTs = 0, raf = null;
+    const panel = { canvas, renderFn, countEl, running: true, speed: 1, offset: 0 };
 
-    // speed slider label
-    {
-      const sp = document.createElement('span');
-      sp.className = 'spd-lbl';
-      sp.textContent = ' ×1.0';
-      speedEl.parentElement.appendChild(sp);
-    }
+    // speed label
+    const sp = document.createElement('span');
+    sp.className = 'spd-lbl'; sp.textContent = ' ×1.0';
+    speedEl.parentElement.appendChild(sp);
 
     btn.addEventListener('click', () => {
-      running = !running;
-      btn.textContent = running ? '▶ 播放' : '⏸ 暂停';
-      btn.classList.toggle('active', running);
-      if (running) { lastTs = 0; tick(); }
+      panel.running = !panel.running;
+      btn.textContent = panel.running ? '▶ 播放' : '⏸ 暂停';
+      btn.classList.toggle('active', panel.running);
     });
 
     speedEl.addEventListener('input', () => {
-      speed = parseFloat(speedEl.value);
+      panel.speed = parseFloat(speedEl.value);
       const lbl = speedEl.parentElement.querySelector('.spd-lbl');
-      if (lbl) lbl.textContent = ' ×' + speed.toFixed(1);
-      if (!running) { running = true; btn.textContent = '▶ 播放'; btn.classList.add('active'); lastTs = 0; tick(); }
+      if (lbl) lbl.textContent = ' ×' + panel.speed.toFixed(1);
+      if (!panel.running) { panel.running = true; btn.textContent = '▶ 播放'; btn.classList.add('active'); }
     });
 
-    // cache canvas context (only refresh on resize)
+    // cache canvas context
     let ctxCache = null, ctxW = 0, ctxH = 0;
-    function getCtx() {
-      const dpr = window.devicePixelRatio || 1;
+    panel.getCtx = function() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = canvas.clientWidth, h = +canvas.getAttribute('height');
       const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
       if (canvas.width !== pw || canvas.height !== ph) {
         canvas.width = pw; canvas.height = ph;
-        const c = canvas.getContext('2d');
+        const c = canvas.getContext('2d', { alpha: false });
         c.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctxCache = c; ctxW = w; ctxH = h;
       }
-      return { ctx: ctxCache || canvas.getContext('2d'), w: ctxW || w, h: ctxH || h };
-    }
+      return { ctx: ctxCache || canvas.getContext('2d', { alpha: false }), w: ctxW || w, h: ctxH || h };
+    };
 
-    function draw() {
-      const prevOfs = _ofs;
-      _ofs = offset;
-      const n = renderFn(canvas, getCtx);
-      if (countEl) countEl.textContent = n;
-      _ofs = prevOfs;
-    }
+    return panel;
+  }
 
-    function tick(ts) {
-      if (!running) { raf = null; return; }
-      if (lastTs > 0) {
-        const dt = (ts - lastTs) / 1000;
-        offset = (offset + dt * speed * 60) % T_END;
+  function drawPanel(p) {
+    const prevOfs = _ofs;
+    _ofs = p.offset;
+    const n = p.renderFn(p.canvas, p.getCtx);
+    if (p.countEl) p.countEl.textContent = n;
+    _ofs = prevOfs;
+  }
+
+  let lastTs = 0;
+  function globalTick(ts) {
+    if (lastTs > 0) {
+      const dt = (ts - lastTs) / 1000;
+      for (const p of panels) {
+        if (p.running) p.offset = (p.offset + dt * p.speed * 60) % T_END;
       }
-      lastTs = ts;
-      draw();
-      raf = requestAnimationFrame(tick);
     }
-
-    draw();
-    raf = requestAnimationFrame(tick);
+    lastTs = ts;
+    for (const p of panels) drawPanel(p);
+    requestAnimationFrame(globalTick);
   }
 
   window.addEventListener('DOMContentLoaded', () => {
-    startAnim('canvas-bad',  'speed-bad',  'btn-bad',  'count-bad', renderBad);
-    startAnim('canvas-good', 'speed-good', 'btn-good', null,        renderGood);
+    panels.push(makePanel('canvas-bad',  'speed-bad',  'btn-bad',  'count-bad', renderBad));
+    panels.push(makePanel('canvas-good','speed-good', 'btn-good', null,        renderGood));
+    // initial draw
+    _ofs = 0; drawPanel(panels[0]); drawPanel(panels[1]);
+    requestAnimationFrame(globalTick);
   });
 })();
 </script>
