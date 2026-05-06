@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clock Gate 毛刺问题 — 交互式演示</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
+  .subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 16px; }
+
+  .container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 1300px;
+    width: 100%;
+  }
+
+  .panel {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px;
+    flex: 1;
+    min-width: 500px;
+    max-width: 620px;
+  }
+  .panel h2 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bad {
+    color: #f85149;
+    border-bottom: 2px solid #f85149;
+    padding-bottom: 6px;
+  }
+  .good {
+    color: #3fb950;
+    border-bottom: 2px solid #3fb950;
+    padding-bottom: 6px;
+  }
+
+  .circuit {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: #0d1117;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    min-height: 70px;
+  }
+  .gate {
+    background: #21262d;
+    border: 2px solid #58a6ff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    text-align: center;
+    font-weight: bold;
+    min-width: 60px;
+    position: relative;
+  }
+  .gate.and { border-color: #d2a8ff; }
+  .gate.latch { border-color: #7ee787; }
+  .wire {
+    color: #8b949e;
+    font-size: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    background: #0d1117;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+  }
+  button:hover { background: #30363d; }
+  button.active { background: #388bfd22; border-color: #58a6ff; }
+
+  .glitch-counter {
+    background: #f8514922;
+    border: 1px solid #f8514944;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    color: #f85149;
+  }
+  .glitch-counter .count { font-size: 1.3rem; font-weight: bold; }
+
+  .speed-slider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+  }
+  input[type=range] { width: 80px; accent-color: #58a6ff; }
+
+  .timing-info {
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .highlight { color: #f0883e; font-weight: bold; }
+  .highlight-grn { color: #7ee787; font-weight: bold; }
+
+  @media (max-width: 1050px) {
+    .container { flex-direction: column; align-items: center; }
+    .panel { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Clock Gate 毛刺问题</h1>
+<p class="subtitle">为什么不能用普通 AND gate？Latch + AND 如何消除毛刺？</p>
+
+<div class="container">
+  <!-- Left: simple AND gate -->
+  <div class="panel" id="panel-bad">
+    <h2 class="bad">方案一：普通 AND Gate（有毛刺）</h2>
+    <div class="circuit" style="padding:8px 12px;">
+      <svg viewBox="0 0 560 90" width="100%" height="90" style="display:block;">
+        <defs>
+          <marker id="arrB" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b949e"/></marker>
+          <marker id="arrR" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f85149"/></marker>
+        </defs>
+        <!-- clk input -->
+        <text x="10" y="24" fill="#58a6ff" font-size="13" font-weight="bold" font-family="sans-serif">clk</text>
+        <line x1="40" y1="20" x2="215" y2="20" stroke="#58a6ff" stroke-width="2" marker-end="url(#arrB)"/>
+        <!-- en input -->
+        <text x="10" y="64" fill="#f0883e" font-size="13" font-weight="bold" font-family="sans-serif">en</text>
+        <line x1="40" y1="60" x2="215" y2="60" stroke="#f0883e" stroke-width="2" marker-end="url(#arrB)"/>
+        <!-- branch dot from en to AND bottom pin -->
+        <line x1="215" y1="60" x2="215" y2="50" stroke="#f0883e" stroke-width="2"/>
+        <circle cx="215" cy="60" r="2.5" fill="#f0883e"/>
+        <!-- AND gate body (rounded rect) -->
+        <rect x="215" y="8" width="80" height="74" rx="6" fill="#21262d" stroke="#d2a8ff" stroke-width="2.5"/>
+        <text x="255" y="50" fill="#d2a8ff" font-size="16" font-weight="bold" text-anchor="middle" font-family="sans-serif">AND</text>
+        <!-- AND output -->
+        <line x1="295" y1="45" x2="425" y2="45" stroke="#f85149" stroke-width="2" marker-end="url(#arrR)"/>
+        <text x="430" y="50" fill="#f85149" font-size="13" font-weight="bold" font-family="sans-serif">gated_clk</text>
+        <!-- input labels on AND -->
+        <text x="208" y="26" fill="#58a6ff" font-size="9" text-anchor="end" font-family="sans-serif">A</text>
+        <text x="208" y="68" fill="#f0883e" font-size="9" text-anchor="end" font-family="sans-serif">B</text>
+      </svg>
+    </div>
+    <canvas id="canvas-bad" height="260"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> clk</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div> en</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> gated_clk</div>
+      <div class="legend-item glitch-counter">
+        毛刺：<span class="count" id="count-bad">0</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="btn-bad" class="active">▶ 播放</button>
+      <span class="speed-slider">
+        速度 <input type="range" id="speed-bad" min="0.3" max="3" step="0.1" value="1"> ×1.0
+      </span>
+    </div>
+    <div class="timing-info" style="color:#f85149">
+      enable 在 clk=<span class="highlight">1</span> 期间跳变 →
+      AND 输出出现<span class="highlight">窄脉冲</span> / <span class="highlight">多余边沿</span>
+    </div>
+  </div>
+
+  <!-- Right: latch+AND -->
+  <div class="panel" id="panel-good">
+    <h2 class="good">方案二：Latch + AND（无毛刺）</h2>
+    <div class="circuit" style="padding:10px 16px;">
+      <svg viewBox="0 0 520 128" width="100%" height="128" style="display:block;">
+        <defs>
+          <marker id="ac" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#58a6ff"/></marker>
+          <marker id="ae" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f0883e"/></marker>
+          <marker id="al" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7ee787"/></marker>
+          <marker id="ag" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3fb950"/></marker>
+        </defs>
+
+        <!-- ── Signal labels ── -->
+        <text x="52" y="32" fill="#58a6ff" font-size="13" font-weight="bold" font-family="sans-serif" text-anchor="end">clk</text>
+        <text x="52" y="106" fill="#f0883e" font-size="13" font-weight="bold" font-family="sans-serif" text-anchor="end">en</text>
+
+        <!-- clk line: from label → junction (splits to AND & Latch) -->
+        <line x1="60" y1="28" x2="175" y2="28" stroke="#58a6ff" stroke-width="2"/>
+        <circle cx="175" cy="28" r="2.8" fill="#58a6ff"/>
+
+        <!-- clk → AND top input -->
+        <line x1="175" y1="28" x2="253" y2="28" stroke="#58a6ff" stroke-width="2" marker-end="url(#ac)"/>
+
+        <!-- clk → Latch CLK pin (down from junction) -->
+        <line x1="175" y1="28" x2="175" y2="76" stroke="#58a6ff" stroke-width="2" marker-end="url(#ac)"/>
+
+        <!-- ── Latch box ── -->
+        <rect x="145" y="80" width="86" height="42" rx="6" fill="#21262d" stroke="#7ee787" stroke-width="2.5"/>
+        <text x="188" y="100" fill="#7ee787" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">Latch</text>
+        <text x="188" y="115" fill="#7ee787" font-size="8" text-anchor="middle" font-family="sans-serif">clk=0 透明</text>
+
+        <!-- latch pin labels -->
+        <text x="152" y="76" fill="#58a6ff" font-size="9" text-anchor="middle" font-family="sans-serif">CLK</text>
+        <text x="136" y="104" fill="#f0883e" font-size="9" text-anchor="end" font-family="sans-serif">D</text>
+        <text x="240" y="104" fill="#7ee787" font-size="9" text-anchor="start" font-family="sans-serif">Q</text>
+
+        <!-- en → Latch D input -->
+        <line x1="60" y1="102" x2="140" y2="102" stroke="#f0883e" stroke-width="2" marker-end="url(#ae)"/>
+
+        <!-- Latch Q → AND bottom input -->
+        <line x1="231" y1="102" x2="255" y2="102" stroke="#7ee787" stroke-width="2"/>
+        <circle cx="255" cy="102" r="2.2" fill="#7ee787"/>
+        <line x1="255" y1="102" x2="255" y2="44" stroke="#7ee787" stroke-width="2" marker-end="url(#al)"/>
+
+        <!-- ── AND gate (standard symbol) ── -->
+        <path d="M 265,14 L 265,62 Q 320,62 352,38 Q 320,14 265,14 Z"
+              fill="#21262d" stroke="#d2a8ff" stroke-width="2.5"/>
+        <text x="305" y="42" fill="#d2a8ff" font-size="15" font-weight="bold" text-anchor="middle" font-family="sans-serif">AND</text>
+
+        <!-- AND output → gated_clk -->
+        <line x1="352" y1="38" x2="435" y2="38" stroke="#3fb950" stroke-width="2" marker-end="url(#ag)"/>
+        <text x="440" y="43" fill="#3fb950" font-size="13" font-weight="bold" font-family="sans-serif">gated_clk</text>
+      </svg>
+    </div>
+    <canvas id="canvas-good" height="300"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> clk</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div> en</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7ee787"></div> latch out (Q)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> gated_clk</div>
+    </div>
+    <div class="controls">
+      <button id="btn-good" class="active">▶ 播放</button>
+      <span class="speed-slider">
+        速度 <input type="range" id="speed-good" min="0.3" max="3" step="0.1" value="1"> ×1.0
+      </span>
+    </div>
+    <div class="timing-info" style="color:#3fb950">
+      latch 仅在 clk=<span class="highlight-grn">0</span> 时透明 →
+      clk=<span class="highlight-grn">1</span> 期间 Q 锁存不变 → 输出<span class="highlight-grn">完整干净</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const CLK_PERIOD = 20;
+  const DUTY = 10;
+  const T_END = 140;
+
+  // ---- signal definitions ----
+  function clk(t) { return ((t % CLK_PERIOD) + CLK_PERIOD) % CLK_PERIOD < DUTY ? 1 : 0; }
+
+  // en transitions
+  const EN_EVENTS = [
+    {t:8,v:1},{t:28,v:0},{t:55,v:1},{t:72,v:0},{t:98,v:1},{t:115,v:0}
+  ];
+  function en(t) {
+    let v = 0;
+    for (const e of EN_EVENTS) { if (t >= e.t) v = e.v; }
+    return v;
+  }
+
+  // low-transparent latch: transparent when clk=0, holds when clk=1
+  function latchQ(t) {
+    if (clk(t) === 0) return en(t);
+    // find most recent 0→1 edge of clk
+    const edge = Math.floor(t / CLK_PERIOD) * CLK_PERIOD;
+    if (edge < 0) return 0;
+    return en(edge); // value just after edge (en is piecewise constant, so == value just before)
+  }
+
+  // detect narrow pulses (< DUTY - 0.5ns) in a signal sampled at given step
+  function detectGlitches(fn, tMax, step) {
+    const glitches = [];
+    let prev = fn(0), edge = -1;
+    for (let t = step; t <= tMax; t += step) {
+      const cur = fn(t);
+      if (cur !== prev) {
+        if (edge >= 0 && prev === 1 && (t - edge) < DUTY - 0.5)
+          glitches.push({start: edge, end: t, width: t - edge});
+        edge = t;
+      }
+      prev = cur;
+    }
+    return glitches;
+  }
+
+  // ============================================================
+  //  Drawing helpers
+  // ============================================================
+  const V = 16, TRK = 48, GAP = 8;
+  function ty(i) { return V + i * (TRK + GAP) + TRK / 2; }
+  function tt(i) { return V + i * (TRK + GAP); }
+
+  function setupCtx(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return {ctx, w, h};
+  }
+
+  function grid(ctx, w, h, ppns) {
+    ctx.strokeStyle = '#21262d';
+    ctx.lineWidth = 1;
+    for (let t = 0; t <= T_END; t += 10) {
+      const x = t / ppns;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+  }
+
+  function wave(ctx, w, fn, ppns, color, track) {
+    const y = ty(track), step = ppns * 0.25;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += step) {
+      const v = fn(x * ppns);
+      const py = v ? y - 14 : y + 14;
+      x === 0 ? ctx.moveTo(x, py) : ctx.lineTo(x, py);
+    }
+    ctx.stroke();
+  }
+
+  function label(ctx, x, track, text, color) {
+    ctx.fillStyle = color;
+    ctx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(text, x, ty(track) - 17);
+  }
+
+  // ============================================================
+  //  Panel A: simple AND gate  (方案一)
+  // ============================================================
+  function renderBad(canvas) {
+    const {ctx, w, h} = setupCtx(canvas);
+    const ppns = T_END / w;
+    ctx.clearRect(0, 0, w, h);
+
+    const gated = (t) => clk(t) & en(t);
+    const glitches = detectGlitches(gated, T_END, ppns * 0.25);
+
+    // highlight glitch zones
+    ctx.fillStyle = 'rgba(248,81,73,0.22)';
+    for (const g of glitches) ctx.fillRect(g.start / ppns, tt(2), (g.end - g.start) / ppns, TRK);
+
+    grid(ctx, w, h, ppns);
+    wave(ctx, w, clk,   ppns, '#58a6ff', 0);
+    wave(ctx, w, en,    ppns, '#f0883e', 1);
+    wave(ctx, w, gated, ppns, '#f85149', 2);
+
+    label(ctx, 4, 0, 'clk',       '#58a6ff');
+    label(ctx, 4, 1, 'en',        '#f0883e');
+    label(ctx, 4, 2, 'gated_clk', '#f85149');
+
+    for (const g of glitches) {
+      const gx = (g.start + g.end) / 2 / ppns;
+      ctx.fillStyle = '#f85149';
+      ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠ 毛刺', gx, ty(2) + 20);
+      ctx.textAlign = 'start';
+    }
+    return glitches.length;
+  }
+
+  // ============================================================
+  //  Panel B: Latch + AND  (方案二)
+  // ============================================================
+  function renderGood(canvas) {
+    const {ctx, w, h} = setupCtx(canvas);
+    const ppns = T_END / w;
+    ctx.clearRect(0, 0, w, h);
+
+    const gated = (t) => clk(t) & latchQ(t);
+
+    grid(ctx, w, h, ppns);
+    wave(ctx, w, clk,    ppns, '#58a6ff', 0);
+    wave(ctx, w, en,     ppns, '#f0883e', 1);
+    wave(ctx, w, latchQ, ppns, '#7ee787', 2);
+    wave(ctx, w, gated,  ppns, '#3fb950', 3);
+
+    label(ctx, 4, 0, 'clk',       '#58a6ff');
+    label(ctx, 4, 1, 'en',        '#f0883e');
+    label(ctx, 4, 2, 'latch Q',   '#7ee787');
+    label(ctx, 4, 3, 'gated_clk', '#3fb950');
+
+    // shade "hold" regions on latch Q track
+    for (let t = 0; t <= T_END; t += CLK_PERIOD) {
+      ctx.fillStyle = 'rgba(126,231,135,0.06)';
+      ctx.fillRect(t / ppns, tt(2), DUTY / ppns, TRK);
+    }
+  }
+
+  // ============================================================
+  //  Animation (scroll static scene horizontally)
+  // ============================================================
+  function startAnim(canvasId, speedId, btnId, countId, renderFn) {
+    const canvas = document.getElementById(canvasId);
+    const speedEl = document.getElementById(speedId);
+    const btn = document.getElementById(btnId);
+    const countEl = countId ? document.getElementById(countId) : null;
+    let running = true, speed = 1, offset = 0, lastTs = 0, raf = null;
+
+    // speed slider label
+    {
+      const sp = document.createElement('span');
+      sp.className = 'spd-lbl';
+      sp.textContent = ' ×1.0';
+      speedEl.parentElement.appendChild(sp);
+    }
+
+    btn.addEventListener('click', () => {
+      running = !running;
+      btn.textContent = running ? '▶ 播放' : '⏸ 暂停';
+      btn.classList.toggle('active', running);
+      if (running) { lastTs = 0; tick(); }
+    });
+
+    speedEl.addEventListener('input', () => {
+      speed = parseFloat(speedEl.value);
+      const lbl = speedEl.parentElement.querySelector('.spd-lbl');
+      if (lbl) lbl.textContent = ' ×' + speed.toFixed(1);
+      if (!running) { running = true; btn.textContent = '▶ 播放'; btn.classList.add('active'); lastTs = 0; tick(); }
+    });
+
+    function draw() {
+      // translate the time base: t_view = t_real + offset (mod T_END)
+      const origClk = clk, origEn = en;
+
+      clk = function(t) { return origClk((t + offset) % T_END); };
+      en  = function(t) { return origEn( (t + offset) % T_END); };
+      // latchQ must be re-derived from shifted clk/en, NOT from wrapping
+      // the old latchQ, because old latchQ calls clk()/en() which are now shifted
+      latchQ = function(t) {
+        const st = (t + offset) % T_END;
+        if (origClk(st) === 0) return origEn(st);
+        const edge = Math.floor(st / CLK_PERIOD) * CLK_PERIOD;
+        if (edge < 0) return 0;
+        return origEn(edge);
+      };
+
+      const n = renderFn(canvas);
+      if (countEl) countEl.textContent = n;
+
+      clk = origClk; en = origEn;
+      latchQ = function(t) {
+        if (origClk(t) === 0) return origEn(t);
+        const edge = Math.floor(t / CLK_PERIOD) * CLK_PERIOD;
+        if (edge < 0) return 0;
+        return origEn(edge);
+      };
+    }
+
+    function tick(ts) {
+      if (!running) { raf = null; return; }
+      if (lastTs > 0) {
+        const dt = (ts - lastTs) / 1000;
+        offset = (offset + dt * speed * 60) % T_END;
+      }
+      lastTs = ts;
+      draw();
+      raf = requestAnimationFrame(tick);
+    }
+
+    draw();
+    raf = requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    startAnim('canvas-bad',  'speed-bad',  'btn-bad',  'count-bad', renderBad);
+    startAnim('canvas-good', 'speed-good', 'btn-good', null,        renderGood);
+  });
+})();
+</script>
+</body>
+</html>
