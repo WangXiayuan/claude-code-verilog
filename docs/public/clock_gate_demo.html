@@ -316,26 +316,30 @@
   const DUTY = 10;
   const T_END = 140;
 
-  // ---- signal definitions ----
-  function clk(t) { return ((t % CLK_PERIOD) + CLK_PERIOD) % CLK_PERIOD < DUTY ? 1 : 0; }
+  // ---- signal definitions (all use _ofs for animation scroll) ----
+  let _ofs = 0; // global scroll offset, set before each render
 
-  // en transitions
+  function clk(t) { return ((t + _ofs) % CLK_PERIOD + CLK_PERIOD) % CLK_PERIOD < DUTY ? 1 : 0; }
+
   const EN_EVENTS = [
     {t:8,v:1},{t:28,v:0},{t:55,v:1},{t:72,v:0},{t:98,v:1},{t:115,v:0}
   ];
   function en(t) {
+    const st = (t + _ofs) % T_END;
     let v = 0;
-    for (const e of EN_EVENTS) { if (t >= e.t) v = e.v; }
+    for (const e of EN_EVENTS) { if (st >= e.t) v = e.v; }
     return v;
   }
 
-  // low-transparent latch: transparent when clk=0, holds when clk=1
   function latchQ(t) {
-    if (clk(t) === 0) return en(t);
-    // find most recent 0→1 edge of clk
-    const edge = Math.floor(t / CLK_PERIOD) * CLK_PERIOD;
+    const st = (t + _ofs) % T_END;
+    if (((st % CLK_PERIOD) + CLK_PERIOD) % CLK_PERIOD < DUTY === false) return en(t); // clk=0 → transparent
+    const edge = Math.floor(st / CLK_PERIOD) * CLK_PERIOD;
     if (edge < 0) return 0;
-    return en(edge); // value just after edge (en is piecewise constant, so == value just before)
+    // value of en at the last rising edge
+    let v = 0;
+    for (const e of EN_EVENTS) { if (edge >= e.t) v = e.v; }
+    return v;
   }
 
   // detect narrow pulses (< DUTY - 0.5ns) in a signal sampled at given step
@@ -407,15 +411,14 @@
   // ============================================================
   //  Panel A: simple AND gate  (方案一)
   // ============================================================
-  function renderBad(canvas) {
-    const {ctx, w, h} = setupCtx(canvas);
+  function renderBad(canvas, getCtx) {
+    const {ctx, w, h} = getCtx();
     const ppns = T_END / w;
     ctx.clearRect(0, 0, w, h);
 
     const gated = (t) => clk(t) & en(t);
     const glitches = detectGlitches(gated, T_END, ppns * 0.25);
 
-    // highlight glitch zones
     ctx.fillStyle = 'rgba(248,81,73,0.22)';
     for (const g of glitches) ctx.fillRect(g.start / ppns, tt(2), (g.end - g.start) / ppns, TRK);
 
@@ -442,8 +445,8 @@
   // ============================================================
   //  Panel B: Latch + AND  (方案二)
   // ============================================================
-  function renderGood(canvas) {
-    const {ctx, w, h} = setupCtx(canvas);
+  function renderGood(canvas, getCtx) {
+    const {ctx, w, h} = getCtx();
     const ppns = T_END / w;
     ctx.clearRect(0, 0, w, h);
 
@@ -499,32 +502,27 @@
       if (!running) { running = true; btn.textContent = '▶ 播放'; btn.classList.add('active'); lastTs = 0; tick(); }
     });
 
+    // cache canvas context (only refresh on resize)
+    let ctxCache = null, ctxW = 0, ctxH = 0;
+    function getCtx() {
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth, h = +canvas.getAttribute('height');
+      const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+      if (canvas.width !== pw || canvas.height !== ph) {
+        canvas.width = pw; canvas.height = ph;
+        const c = canvas.getContext('2d');
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctxCache = c; ctxW = w; ctxH = h;
+      }
+      return { ctx: ctxCache || canvas.getContext('2d'), w: ctxW || w, h: ctxH || h };
+    }
+
     function draw() {
-      // translate the time base: t_view = t_real + offset (mod T_END)
-      const origClk = clk, origEn = en;
-
-      clk = function(t) { return origClk((t + offset) % T_END); };
-      en  = function(t) { return origEn( (t + offset) % T_END); };
-      // latchQ must be re-derived from shifted clk/en, NOT from wrapping
-      // the old latchQ, because old latchQ calls clk()/en() which are now shifted
-      latchQ = function(t) {
-        const st = (t + offset) % T_END;
-        if (origClk(st) === 0) return origEn(st);
-        const edge = Math.floor(st / CLK_PERIOD) * CLK_PERIOD;
-        if (edge < 0) return 0;
-        return origEn(edge);
-      };
-
-      const n = renderFn(canvas);
+      const prevOfs = _ofs;
+      _ofs = offset;
+      const n = renderFn(canvas, getCtx);
       if (countEl) countEl.textContent = n;
-
-      clk = origClk; en = origEn;
-      latchQ = function(t) {
-        if (origClk(t) === 0) return origEn(t);
-        const edge = Math.floor(t / CLK_PERIOD) * CLK_PERIOD;
-        if (edge < 0) return 0;
-        return origEn(edge);
-      };
+      _ofs = prevOfs;
     }
 
     function tick(ts) {
