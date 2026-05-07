@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>桶形移位器 (Barrel Shifter) — 交互式演示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh; padding: 20px;
+}
+h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
+.subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 20px; }
+.controls {
+  display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 16px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 14px 20px; max-width: 920px; width: 100%;
+}
+.ctrl-group { display: flex; flex-direction: column; gap: 3px; }
+.ctrl-group label { font-size: 0.72rem; color: #8b949e; }
+.ctrl-group .val { font-size: 0.85rem; font-weight: bold; color: #e6edf3; min-width: 60px; }
+input[type=range] { accent-color: #58a6ff; width: 140px; }
+.btn-row { display: flex; gap: 4px; }
+.btn-row button {
+  background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+  padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
+}
+.btn-row button.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+#bs-canvas { width: 100%; max-width: 920px; border-radius: 10px; }
+.info-box {
+  max-width: 920px; width: 100%; margin-top: 14px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 12px 16px; font-size: 0.78rem; color: #8b949e; line-height: 1.6;
+}
+.info-box b { color: #e6edf3; }
+</style>
+</head>
+<body>
+<h1>桶形移位器 (Barrel Shifter)</h1>
+<div class="subtitle">基于 MUX 的多级移位网络 — 任意位数移位只需 O(log₂N) 级门延时</div>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>输入数据</label>
+    <div class="val" id="input-val">0b10110010 (178)</div>
+    <input type="range" id="input-slider" min="0" max="255" value="178">
+  </div>
+  <div class="ctrl-group">
+    <label>移位量 (0–7)</label>
+    <div class="val" id="shift-val">3 bit</div>
+    <input type="range" id="shift-slider" min="0" max="7" value="3">
+  </div>
+  <div class="ctrl-group">
+    <label>方向</label>
+    <div class="btn-row" id="dir-btns">
+      <button data-dir="left">左移 &lt;&lt;</button>
+      <button data-dir="right" class="active">右移 &gt;&gt;</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>填充方式</label>
+    <div class="btn-row" id="type-btns">
+      <button data-type="logical" class="active">填 0</button>
+      <button data-type="arithmetic">符号扩展</button>
+      <button data-type="rotate">循环</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="bs-canvas" height="470"></canvas>
+
+<div class="info-box" id="info-text"></div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('bs-canvas');
+  const ctx = canvas.getContext('2d');
+
+  let inputVal = 178;
+  let shiftAmt = 3;
+  let direction = 'right';
+  let shiftType = 'logical';
+
+  function compute() {
+    const N = 8;
+    let v = inputVal & 0xff;
+    if (shiftAmt === 0) return v;
+    if (direction === 'left') {
+      if (shiftType === 'rotate') return ((v << shiftAmt) | (v >>> (N - shiftAmt))) & 0xff;
+      return (v << shiftAmt) & 0xff;
+    } else {
+      if (shiftType === 'rotate') return ((v >>> shiftAmt) | (v << (N - shiftAmt))) & 0xff;
+      if (shiftType === 'arithmetic') {
+        const sign = v & 0x80;
+        let r = v >>> shiftAmt;
+        if (sign) for (let i = 7; i >= N - shiftAmt; i--) r |= (1 << i);
+        return r & 0xff;
+      }
+      return v >>> shiftAmt;
+    }
+  }
+
+  function computeStages() {
+    const bits = [];
+    for (let i = 7; i >= 0; i--) bits.push((inputVal >> i) & 1);
+
+    const s = [(shiftAmt >> 2) & 1, (shiftAmt >> 1) & 1, (shiftAmt >> 0) & 1];
+    const stages = [bits.slice()];
+    let prev = bits.slice();
+
+    for (let stage = 0; stage < 3; stage++) {
+      const amount = [4, 2, 1][stage];
+      const ctrl = s[stage];
+      const next = new Array(8).fill(0);
+
+      for (let i = 0; i < 8; i++) {
+        if (ctrl === 0) {
+          next[i] = prev[i];
+        } else {
+          let src = direction === 'right' ? i - amount : i + amount;
+          if (src < 0 || src >= 8) {
+            if (shiftType === 'rotate') {
+              src = (src + 8) % 8;
+            } else if (shiftType === 'arithmetic' && direction === 'right') {
+              src = 0;
+            } else {
+              src = -1;
+            }
+          }
+          next[i] = src >= 0 ? prev[src] : 0;
+        }
+      }
+      prev = next;
+      stages.push(next.slice());
+    }
+    return { stages, s };
+  }
+
+  const COL_HEADERS = ['输入', '×1 级', '×2 级', '×4 级', '输出'];
+  const COL_TOTAL = 5;
+  const BIT_N = 8;
+
+  function draw() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth;
+    const h = +canvas.getAttribute('height');
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const padX = 55, padTop = 92, padBtm = 60;
+    const bw = 38, gap = 58;
+    const colW = bw + gap;
+    const useW = padX * 2 + colW * (COL_TOTAL - 1);
+    const startX = Math.max(10, (w - useW) / 2 + padX);
+    const bitH = bw + 8;
+    const colXs = [];
+    for (let c = 0; c < COL_TOTAL; c++) colXs.push(startX + colW * c);
+    const bitY = (i) => padTop + i * bitH + bitH / 2 - bw / 2;
+    const bitCY = (i) => bitY(i) + bw / 2;
+
+    const { stages, s } = computeStages();
+    const output = compute();
+    const outBits = [];
+    for (let i = 7; i >= 0; i--) outBits.push((output >> i) & 1);
+
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
+
+    // --- column headers ---
+    ctx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    for (let c = 0; c < COL_TOTAL; c++) {
+      ctx.fillStyle = c === 0 || c === COL_TOTAL - 1 ? '#58a6ff' : '#8b949e';
+      ctx.fillText(COL_HEADERS[c], colXs[c] + bw / 2, 24);
+    }
+
+    // --- stage control bits (above columns 1,2,3) ---
+    const dirSym = direction === 'right' ? '>>' : '<<';
+    const amounts = [1, 2, 4];
+    for (let st = 0; st < 3; st++) {
+      const cx = colXs[st + 1] + bw / 2;
+      const cy = padTop - 34;
+      // control label
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('s' + [0, 1, 2][st] + ' =', cx, cy - 8);
+      // control bit circle
+      ctx.fillStyle = s[st] ? '#f0883e' : '#30363d';
+      ctx.strokeStyle = s[st] ? '#f0883e' : '#484f58';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy + 6, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(s[st] ? '1' : '0', cx, cy + 10);
+    }
+
+    // --- MUX symbol for each stage (trapezoid) ---
+    const muxW = 12;
+    for (let st = 0; st < 3; st++) {
+      const cx = colXs[st + 1] - 2; // left edge of column
+      for (let i = 0; i < BIT_N; i++) {
+        const cy = bitCY(i);
+        ctx.fillStyle = '#21262d';
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - muxW, cy - 7);
+        ctx.lineTo(cx, cy - 7);
+        ctx.lineTo(cx + 3, cy);
+        ctx.lineTo(cx, cy + 7);
+        ctx.lineTo(cx - muxW, cy + 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // MUX select input (tiny arrow)
+        ctx.fillStyle = s[st] ? '#f0883e' : '#484f58';
+        ctx.beginPath();
+        ctx.moveTo(cx - muxW / 2, cy - 10);
+        ctx.lineTo(cx - muxW / 2 - 3, cy - 15);
+        ctx.lineTo(cx - muxW / 2 + 3, cy - 15);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // --- data flow connections ---
+    for (let st = 0; st < 3; st++) {
+      const amount = [1, 2, 4][st];
+      const ctrl = s[st];
+      const srcCol = st, dstCol = st + 1;
+      const x0 = colXs[srcCol] + bw;
+      const x1 = colXs[dstCol] - muxW;
+      const midX = (x0 + x1) / 2;
+
+      for (let i = 0; i < BIT_N; i++) {
+        // src bit index (where data comes FROM)
+        let srcI = i;
+        if (ctrl) srcI = direction === 'right' ? i + amount : i - amount;
+
+        const sy = bitCY(i);
+        const inRange = srcI >= 0 && srcI < BIT_N;
+        const activePath = ctrl && (inRange || shiftType === 'rotate');
+
+        if (ctrl && inRange) {
+          // active shifted path: diagonal line
+          const sySrc = bitCY(srcI);
+          ctx.strokeStyle = '#58a6ff';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(x0, sySrc);
+          ctx.lineTo(x1, sy);
+          ctx.stroke();
+
+          // small arrow in the middle
+          const amx = (x0 + x1) / 2;
+          const amy = (sySrc + sy) / 2;
+          const ang = Math.atan2(sy - sySrc, x1 - x0);
+          ctx.fillStyle = '#58a6ff';
+          ctx.beginPath();
+          ctx.moveTo(amx + 6 * Math.cos(ang), amy + 6 * Math.sin(ang));
+          ctx.lineTo(amx - 5 * Math.cos(ang - 0.5), amy - 5 * Math.sin(ang - 0.5));
+          ctx.lineTo(amx - 5 * Math.cos(ang + 0.5), amy - 5 * Math.sin(ang + 0.5));
+          ctx.closePath();
+          ctx.fill();
+
+        } else if (!ctrl) {
+          // passthrough: straight line
+          ctx.strokeStyle = '#30363d';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(x0, sy);
+          ctx.lineTo(x1, sy);
+          ctx.stroke();
+        } else {
+          // ctrl=1 but src out of range (fill 0 / sign ext): faint line
+          ctx.strokeStyle = '#1a1f27';
+          ctx.lineWidth = 0.6;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          ctx.moveTo(x0, sy);
+          ctx.lineTo(x1, sy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    // direct connection from last stage to output
+    {
+      const x0 = colXs[3] + bw;
+      const x1 = colXs[4];
+      for (let i = 0; i < BIT_N; i++) {
+        const sy = bitCY(i);
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, sy);
+        ctx.lineTo(x1, sy);
+        ctx.stroke();
+      }
+    }
+
+    // --- bit cells ---
+    for (let c = 0; c < COL_TOTAL; c++) {
+      const bits = c === 0 ? stages[0] : (c === COL_TOTAL - 1 ? outBits : stages[c]);
+      const x = colXs[c];
+
+      for (let i = 0; i < BIT_N; i++) {
+        const y = bitY(i);
+        const isOne = bits[i];
+
+        // cell fill
+        ctx.fillStyle = isOne ? '#1a3a2a' : '#161b22';
+        ctx.strokeStyle = isOne ? '#3fb950' : '#30363d';
+        ctx.lineWidth = isOne ? 2 : 1;
+        ctx.beginPath();
+        roundRect(ctx, x, y, bw, bw, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        // slightly brighter left accent
+        ctx.fillStyle = isOne ? '#7ee787' : '#30363d';
+        ctx.fillRect(x, y, 3, bw);
+
+        // bit value
+        ctx.fillStyle = isOne ? '#7ee787' : '#484f58';
+        ctx.font = 'bold 14px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(isOne ? '1' : '0', x + bw / 2, y + bw / 2 + 5);
+      }
+    }
+
+    // --- bit position labels on left ---
+    ctx.fillStyle = '#484f58';
+    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'right';
+    for (let i = 0; i < BIT_N; i++) {
+      ctx.fillText('bit' + (7 - i), colXs[0] - 10, bitCY(i) + 3);
+    }
+
+    // --- output value label ---
+    const ox = colXs[4] + bw / 2;
+    const oy = bitY(7) + bw + 22;
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    const hex = '0x' + output.toString(16).toUpperCase().padStart(2, '0');
+    ctx.fillText(hex + ' (' + output + ')', ox, oy);
+
+    // --- stage boxes ---
+    for (let st = 1; st <= 3; st++) {
+      const x = colXs[st] - muxW - 6;
+      const top = bitY(0) - 6;
+      const hh = bitY(7) + bw + 6 - top;
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 5]);
+      ctx.strokeRect(x, top, bw + muxW + 12, hh);
+      ctx.setLineDash([]);
+
+      // stage label
+      const amount = [1, 2, 4][st - 1];
+      ctx.fillStyle = '#30363d';
+      ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(dirSym + ' ' + amount, colXs[st] + bw / 2, top + hh + 16);
+    }
+
+    // --- stage to output label ---
+    ctx.fillStyle = '#30363d';
+    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    const lastTop = bitY(0) - 6;
+    ctx.fillText('直通', colXs[4] + bw / 2, lastTop + (bitY(7) + bw + 6 - lastTop) + 16);
+
+    // --- bottom explanation ---
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      '3 级 MUX 网络：s2·4 + s1·2 + s0·1 = ' + (s[0] * 4 + s[1] * 2 + s[2] * 1) + ' 位',
+      w / 2, h - 12
+    );
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.lineTo(x + w - r, y);
+    c.arcTo(x + w, y, x + w, y + r, r);
+    c.lineTo(x + w, y + h - r);
+    c.arcTo(x + w, y + h, x + w - r, y + h, r);
+    c.lineTo(x + r, y + h);
+    c.arcTo(x, y + h, x, y + h - r, r);
+    c.lineTo(x, y + r);
+    c.arcTo(x, y, x + r, y, r);
+    c.closePath();
+  }
+
+  function updateInfo() {
+    const d = direction === 'left' ? '左移' : '右移';
+    let desc;
+    if (shiftType === 'logical') {
+      desc = direction === 'left' ? '低位补 0' : '高位补 0';
+    } else if (shiftType === 'arithmetic') {
+      desc = direction === 'left' ? '低位补 0（与逻辑左移相同）' : '高位填充符号位（MSB），保持正负数不变';
+    } else {
+      desc = direction === 'left' ? '移出的高位循环补入低位' : '移出的低位循环补入高位';
+    }
+    document.getElementById('info-text').innerHTML =
+      '<b>' + d + ' ' + shiftAmt + ' 位</b> — ' + desc + '。<br>' +
+      'MUX 级数 = ⌈log₂8⌉ = 3 级，无论移位多少，总延时仅 3 级门延时（vs 逐位移位器的 1~7 级）。';
+  }
+
+  function updateAll() {
+    document.getElementById('input-val').textContent =
+      '0b' + inputVal.toString(2).padStart(8, '0') + ' (' + inputVal + ')';
+    document.getElementById('shift-val').textContent = shiftAmt + ' bit';
+    updateInfo();
+    draw();
+  }
+
+  document.getElementById('input-slider').addEventListener('input', function () {
+    inputVal = +this.value; updateAll();
+  });
+  document.getElementById('shift-slider').addEventListener('input', function () {
+    shiftAmt = +this.value; updateAll();
+  });
+  document.getElementById('dir-btns').addEventListener('click', function (e) {
+    if (e.target.tagName !== 'BUTTON') return;
+    direction = e.target.dataset.dir;
+    this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    updateAll();
+  });
+  document.getElementById('type-btns').addEventListener('click', function (e) {
+    if (e.target.tagName !== 'BUTTON') return;
+    shiftType = e.target.dataset.type;
+    this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    updateAll();
+  });
+  window.addEventListener('resize', draw);
+  updateAll();
+})();
+</script>
+</body>
+</html>
