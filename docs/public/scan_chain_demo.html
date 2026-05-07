@@ -13,40 +13,37 @@ body {
   min-height: 100vh; padding: 20px;
 }
 h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
-.subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 18px; }
+.subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 16px; }
 
 .controls {
-  display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
-  margin-bottom: 14px;
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 12px;
   background: #161b22; border: 1px solid #30363d; border-radius: 10px;
-  padding: 12px 18px; max-width: 950px; width: 100%;
+  padding: 10px 16px; max-width: 980px; width: 100%;
 }
-.ctrl-group { display: flex; flex-direction: column; gap: 3px; align-items: center; }
-.ctrl-group label { font-size: 0.7rem; color: #8b949e; }
-.ctrl-group .val { font-size: 0.85rem; font-weight: bold; color: #e6edf3; }
-
-.btn-row { display: flex; gap: 4px; }
+.ctrl-group { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.ctrl-group label { font-size: 0.68rem; color: #8b949e; }
+.btn-row { display: flex; gap: 3px; }
 .btn-row button {
   background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
-  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
-  transition: background 0.15s;
+  padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.76rem;
+  transition: background 0.15s; white-space: nowrap;
 }
 .btn-row button:hover { background: #30363d; }
 .btn-row button.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
 
-#mode-indicator {
-  display: inline-block; padding: 4px 14px; border-radius: 12px;
-  font-size: 0.82rem; font-weight: bold;
-}
+#sc-canvas { width: 100%; max-width: 980px; border-radius: 10px; }
 
-#sc-canvas { width: 100%; max-width: 950px; border-radius: 10px; }
-
-.info-box {
-  max-width: 950px; width: 100%; margin-top: 12px;
+.step-log {
+  max-width: 980px; width: 100%; margin-top: 10px;
   background: #161b22; border: 1px solid #30363d; border-radius: 10px;
-  padding: 10px 16px; font-size: 0.78rem; color: #8b949e; line-height: 1.6;
+  padding: 10px 16px; font-size: 0.76rem; color: #8b949e;
+  max-height: 140px; overflow-y: auto;
 }
-.info-box b { color: #e6edf3; }
+.step-log .entry { padding: 3px 0; border-bottom: 1px solid #1a1f27; font-family: 'Cascadia Code', 'Consolas', monospace; }
+.step-log .entry b { color: #e6edf3; }
+.step-log .scan { color: #f0883e; }
+.step-log .func { color: #58a6ff; }
 </style>
 </head>
 <body>
@@ -57,37 +54,38 @@ h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
   <div class="ctrl-group">
     <label>工作模式</label>
     <div class="btn-row" id="se-btns">
-      <button data-se="0" class="active">功能模式 (SE=0)</button>
+      <button data-se="0" class="active">功能 (SE=0)</button>
       <button data-se="1">扫描移位 (SE=1)</button>
     </div>
   </div>
   <div class="ctrl-group">
     <label>时钟</label>
-    <div class="btn-row" id="clk-btns">
-      <button id="clk-step">⏵ 单步</button>
+    <div class="btn-row">
+      <button id="clk-step" style="font-size:0.9rem;">⏵ 单步触发</button>
       <button id="clk-auto">▶ 自动</button>
     </div>
   </div>
   <div class="ctrl-group">
     <label>扫描输入 (SI)</label>
     <div class="btn-row" id="si-btns">
-      <button data-si="0">SI=0</button>
-      <button data-si="1" class="active">SI=1</button>
+      <button data-si="0">0</button>
+      <button data-si="1" class="active">1</button>
     </div>
   </div>
   <div class="ctrl-group">
-    <label>速度</label>
-    <input type="range" id="speed-slider" min="0.5" max="5" step="0.5" value="1.5" style="width:90px;">
+    <label>自动速度</label>
+    <input type="range" id="speed-slider" min="1" max="8" step="1" value="3" style="width:80px;">
   </div>
   <div class="ctrl-group">
-    <label>复位</label>
-    <button id="reset-btn" style="background:#21262d;border:1px solid #30363d;color:#f85149;padding:5px 12px;border-radius:6px;cursor:pointer;">⟳ 复位</button>
+    <button id="reset-btn" style="background:#21262d;border:1px solid #30363d;color:#f85149;padding:5px 12px;border-radius:6px;cursor:pointer;">⟳ 全部复位</button>
   </div>
 </div>
 
 <canvas id="sc-canvas" height="460"></canvas>
 
-<div class="info-box" id="info-text"></div>
+<div class="step-log" id="step-log">
+  <div class="entry" style="color:#484f58;">点击「单步触发」开始...</div>
+</div>
 
 <script>
 (function () {
@@ -96,63 +94,107 @@ h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
   const ctx = canvas.getContext('2d');
 
   // state
-  let se = 0;          // scan enable
-  let si = 1;          // scan input
-  let ffs = [0, 0, 0, 0];  // flip-flop values
-  let funcD = [1, 0, 1, 0]; // functional D inputs
+  let se = 0;
+  let si = 1;
+  let ffs = [0, 1, 0, 0];    // current FF values
+  let prevFfs = [0, 1, 0, 0]; // pre-clock values
+  let funcD = [1, 0, 1, 0];
+  let stepCount = 0;
   let autoRunning = false;
   let autoTimer = null;
-  let speed = 1.5;
-  let clockEdge = false;  // for pulse animation
-  let edgeTimer = null;
+  let speed = 3;
+
+  // animation state
+  let animStart = 0;
+  let animDuration = 420; // ms
+  let animating = false;
+  let animNewFfs = null;
+  let animPrevFfs = null;
+  let animRaf = null;
+  let transitionBits = []; // which bits are transitioning (to highlight)
+
+  function startAnim(newVals) {
+    animPrevFfs = ffs.slice();
+    animNewFfs = newVals.slice();
+    transitionBits = [];
+    for (let i = 0; i < N_FF; i++) {
+      if (animPrevFfs[i] !== animNewFfs[i]) transitionBits.push(i);
+    }
+    animStart = performance.now();
+    animating = true;
+    if (animRaf) cancelAnimationFrame(animRaf);
+    animRaf = requestAnimationFrame(animLoop);
+  }
+
+  function animLoop(ts) {
+    const elapsed = ts - animStart;
+    const t = Math.min(elapsed / animDuration, 1);
+    // easeInOutCubic
+    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    draw(ease);
+    if (t < 1) {
+      animRaf = requestAnimationFrame(animLoop);
+    } else {
+      animating = false;
+      ffs = animNewFfs.slice();
+      draw(1);
+    }
+  }
 
   function clkTick() {
+    if (animating) return; // don't interrupt animation
     const next = ffs.slice();
     if (se) {
-      // scan shift mode: SI → FF0 → FF1 → FF2 → FF3 → SO
       next[0] = si;
       for (let i = 1; i < N_FF; i++) next[i] = ffs[i - 1];
     } else {
-      // functional mode: D → FF (capture)
       for (let i = 0; i < N_FF; i++) next[i] = funcD[i];
     }
-    ffs = next;
+    prevFfs = ffs.slice();
+    stepCount++;
+    addLogEntry(next);
+    startAnim(next);
+  }
 
-    // pulse animation
-    clockEdge = true;
-    clearTimeout(edgeTimer);
-    edgeTimer = setTimeout(() => { clockEdge = false; draw(); }, 120);
-    draw();
+  function addLogEntry(next) {
+    const log = document.getElementById('step-log');
+    const div = document.createElement('div');
+    div.className = 'entry';
+    if (se) {
+      div.innerHTML = '<span class="scan">[Shift]</span> 第<b>' + stepCount + '</b>拍：' +
+        'SI=' + si + ' → ' +
+        prevFfs.map((v, i) => 'FF' + i + '=' + v).join(' → ') + ' → SO' +
+        '&nbsp;&nbsp;⇒&nbsp;&nbsp;新状态：<b>' +
+        next.map(v => v).join(' ') + '</b>';
+    } else {
+      div.innerHTML = '<span class="func">[Capture]</span> 第<b>' + stepCount + '</b>拍：' +
+        'D=[' + funcD.join(' ') + '] → ' +
+        '捕获到 FF = <b>' + next.join(' ') + '</b>';
+    }
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    // keep max 50 entries
+    while (log.children.length > 50) log.removeChild(log.firstChild);
+    if (log.children.length === 1 && log.firstChild.textContent.includes('点击')) {
+      log.removeChild(log.firstChild);
+    }
   }
 
   function reset() {
-    ffs = [0, 0, 0, 0];
-    clockEdge = false;
-    draw();
-  }
-
-  function updateInfo() {
-    const el = document.getElementById('info-text');
-    if (se) {
-      const chain = [si, ...ffs.slice(0, N_FF - 1)];
-      el.innerHTML =
-        '<b>扫描移位模式 (SE=1)</b> — 触发器串联为移位寄存器。<br>' +
-        '数据流：<b>SI(' + si + ')</b> → ' +
-        chain.map((v, i) => 'FF' + i + '(' + v + ')').join(' → ') +
-        ' → <b>FF' + (N_FF - 1) + '(' + ffs[N_FF - 1] + ')</b> → SO<br>' +
-        '此时芯片处于测试模式，可向内部寄存器任意写入/读出数据。';
-    } else {
-      el.innerHTML =
-        '<b>功能模式 (SE=0)</b> — 触发器正常工作，D 输入端经过 MUX 送入。<br>' +
-        '当前 D 输入 = [' + funcD.join(', ') + ']，触发器的值 = [' + ffs.join(', ') + ']。<br>' +
-        '下一个时钟上升沿将 D 值采样到触发器中。';
-    }
+    ffs = [0, 1, 0, 0];
+    prevFfs = [0, 1, 0, 0];
+    stepCount = 0;
+    animating = false;
+    if (animRaf) cancelAnimationFrame(animRaf);
+    document.getElementById('step-log').innerHTML =
+      '<div class="entry" style="color:#484f58;">已复位，点击「单步触发」开始...</div>';
+    draw(1);
   }
 
   // ==============================
   //  DRAWING
   // ==============================
-  function draw() {
+  function draw(animT) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = canvas.clientWidth;
     const h = +canvas.getAttribute('height');
@@ -161,250 +203,304 @@ h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    // layout
-    const ffW = 80, ffH = 60;
-    const muxW = 36, muxH = 28;
-    const gap = 36;
-    const totalW = N_FF * (ffW + gap) - gap;
-    const startX = (w - totalW) / 2;
-    const ffY = 160, muxY = ffY - 50;
-    const dLabelY = muxY - 26;
-    const siLabelY = dLabelY - 28;
-
-    // colors
     const scanColor = '#f0883e';
     const funcColor = '#58a6ff';
-    const ffBody = '#161b22';
-    const ffStroke = '#30363d';
     const onColor = '#7ee787';
-    const dimColor = '#30363d';
+    const flashColor = '#f78166';
 
-    // === SE indicator at top ===
+    // interpolate FF values during animation
+    function ffVal(i) {
+      if (!animating) return ffs[i];
+      // during animation, show old value then snap to new at threshold
+      if (animT < 0.35) return animPrevFfs[i];
+      return animNewFfs[i];
+    }
+
+    function isTransitioning(i) {
+      return animating && transitionBits.includes(i);
+    }
+
+    // layout: each DFX cell is a grouped block (MUX + DFF)
+    const cellW = 150, cellH = 120;
+    const gap = 20;
+    const totalW = N_FF * cellW + (N_FF - 1) * gap;
+    const startX = (w - totalW) / 2;
+    const cellY = 110;
+
+    // === Title area ===
     ctx.font = 'bold 13px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center';
-    const modeText = se ? '扫描移位 (Shift)' : '功能模式 (Capture)';
-    const modeColor = se ? scanColor : funcColor;
-    ctx.fillStyle = modeColor;
-    ctx.fillText('当前模式: ' + modeText, w / 2, 32);
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(se ? 'SE=1，MUX 选择扫描输入' : 'SE=0，MUX 选择功能输入', w / 2, 50);
+    const modeText = se ? '扫描移位 (Shift) — 触发器串联为移位寄存器' : '功能模式 (Capture) — 触发器按正常路径捕获数据';
+    ctx.fillStyle = se ? scanColor : funcColor;
+    ctx.fillText(modeText, w / 2, 28);
 
-    // === SI input block ===
-    const siX = startX - 80;
-    const siBlockY = ffY + ffH / 2 - 14;
+    // SE indicator bar
+    const barY = 44;
+    ctx.fillStyle = se ? 'rgba(240,136,62,0.12)' : 'rgba(88,166,255,0.12)';
+    ctx.fillRect(startX, barY, totalW, 22);
+    ctx.strokeStyle = se ? 'rgba(240,136,62,0.3)' : 'rgba(88,166,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(startX, barY, totalW, 22);
+    ctx.fillStyle = se ? scanColor : funcColor;
+    ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText('SE = ' + se + (se ? '  (所有 MUX 选通扫描输入)' : '  (所有 MUX 选通功能输入)'), w / 2, barY + 16);
+
+    // === SI source ===
+    const siX = startX - 90;
+    const siY = cellY + cellH * 0.55;
+    const siBoxW = 44, siBoxH = 36;
+    // SI box
     ctx.fillStyle = '#161b22';
-    ctx.strokeStyle = si ? scanColor : '#30363d';
-    ctx.lineWidth = si ? 2.5 : 1;
+    ctx.strokeStyle = se ? scanColor : '#30363d';
+    ctx.lineWidth = se ? 3 : 1.5;
     ctx.beginPath();
-    roundRect(ctx, siX - 10, siBlockY, 28, 28, 5);
+    roundRect(ctx, siX, siY - siBoxH / 2, siBoxW, siBoxH, 6);
     ctx.fill(); ctx.stroke();
-    ctx.fillStyle = si ? scanColor : '#484f58';
-    ctx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#8b949e';
+    ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SI', siX + 4, siBlockY + 19);
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText('扫描输入', siX + 4, siBlockY - 8);
-    // SI value
-    ctx.fillStyle = si ? scanColor : '#484f58';
-    ctx.font = 'bold 14px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(si, siX + 4, siBlockY - 18);
+    ctx.fillText('SI', siX + siBoxW / 2, siY - 4);
+    ctx.fillStyle = si ? onColor : '#484f58';
+    ctx.font = 'bold 18px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(si, siX + siBoxW / 2, siY + 16);
 
-    // === SO output block ===
-    const soX = startX + totalW + 52;
-    const soBlockY = ffY + ffH / 2 - 14;
-    ctx.fillStyle = '#161b22';
-    ctx.strokeStyle = ffs[N_FF - 1] ? scanColor : '#30363d';
-    ctx.lineWidth = ffs[N_FF - 1] ? 2.5 : 1;
-    ctx.beginPath();
-    roundRect(ctx, soX, soBlockY, 28, 28, 5);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = ffs[N_FF - 1] ? scanColor : '#484f58';
-    ctx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText('SO', soX + 14, soBlockY + 19);
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText('扫描输出', soX + 14, soBlockY - 8);
-    ctx.fillStyle = ffs[N_FF - 1] ? scanColor : '#484f58';
-    ctx.font = 'bold 14px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(ffs[N_FF - 1], soX + 14, soBlockY - 18);
-
-    // === Scan chain wire (top level) ===
+    // SI → FF0 scan line
     ctx.strokeStyle = se ? scanColor : '#30363d';
-    ctx.lineWidth = se ? 2.5 : 1;
+    ctx.lineWidth = se ? 2.8 : 1;
     ctx.setLineDash(se ? [] : [4, 4]);
-    // SI to first MUX
     ctx.beginPath();
-    ctx.moveTo(siX + 4, siBlockY);
-    ctx.lineTo(siX + 4, ffY - 10);
-    ctx.lineTo(startX + muxW / 2, ffY - 10);
-    ctx.lineTo(startX + muxW / 2, muxY + muxH);
-    ctx.stroke();
-    // Between FFs: Q_i to MUX_{i+1}
-    for (let i = 0; i < N_FF - 1; i++) {
-      const qx = startX + i * (ffW + gap) + ffW / 2;
-      const nextMuxX = startX + (i + 1) * (ffW + gap) + muxW / 2;
-      ctx.beginPath();
-      ctx.moveTo(qx, ffY + ffH + 10);
-      ctx.lineTo(qx, ffY + ffH + 24);
-      ctx.lineTo(nextMuxX, ffY + ffH + 24);
-      ctx.lineTo(nextMuxX, muxY + muxH);
-      ctx.stroke();
-      // Q label
-      ctx.fillStyle = ffs[i] ? onColor : '#484f58';
-      ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText('Q=' + ffs[i], qx, ffY + ffH + 20);
-    }
-    // Last FF Q to SO
-    const lastQx = startX + (N_FF - 1) * (ffW + gap) + ffW / 2;
-    ctx.beginPath();
-    ctx.moveTo(lastQx, ffY + ffH + 10);
-    ctx.lineTo(lastQx, ffY + ffH + 24);
-    ctx.lineTo(soX + 14, ffY + ffH + 24);
-    ctx.lineTo(soX + 14, soBlockY + 28);
+    ctx.moveTo(siX + siBoxW, siY);
+    ctx.lineTo(startX + 14, siY);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    // === Functional data inputs (top) ===
-    for (let i = 0; i < N_FF; i++) {
-      const fx = startX + i * (ffW + gap) + muxW / 2;
-      ctx.strokeStyle = se ? '#30363d' : funcColor;
-      ctx.lineWidth = se ? 1 : 2;
-      ctx.setLineDash(se ? [4, 4] : []);
+    // arrow
+    if (se) {
+      ctx.fillStyle = scanColor;
       ctx.beginPath();
-      ctx.moveTo(fx, dLabelY);
-      ctx.lineTo(fx, muxY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // D label
-      ctx.fillStyle = se ? '#30363d' : funcColor;
-      ctx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('D' + i, fx, dLabelY - 12);
-      ctx.fillStyle = se ? '#30363d' : funcColor;
-      ctx.font = 'bold 14px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText(funcD[i], fx, dLabelY - 26);
+      ctx.moveTo(startX + 14, siY);
+      ctx.lineTo(startX + 6, siY - 5);
+      ctx.lineTo(startX + 6, siY + 5);
+      ctx.closePath(); ctx.fill();
     }
 
-    // === SE signal line ===
+    // === SO output ===
+    const soX = startX + totalW + 46;
+    const soY = siY;
+    ctx.fillStyle = '#161b22';
     ctx.strokeStyle = se ? scanColor : '#30363d';
-    ctx.lineWidth = se ? 2 : 1;
-    ctx.setLineDash([2, 4]);
-    const seY = muxY - 18;
+    ctx.lineWidth = se ? 3 : 1.5;
     ctx.beginPath();
-    ctx.moveTo(startX - 20, seY);
-    ctx.lineTo(startX + totalW + 20, seY);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    roundRect(ctx, soX, soY - siBoxH / 2, siBoxW, siBoxH, 6);
+    ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#8b949e';
-    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('SE=' + se, startX + totalW + 25, seY + 4);
+    ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText('SO', soX + siBoxW / 2, soY - 4);
+    const soVal = animating ? (animT < 0.35 ? animPrevFfs[N_FF - 1] : animNewFfs[N_FF - 1]) : ffs[N_FF - 1];
+    ctx.fillStyle = soVal ? onColor : '#484f58';
+    ctx.font = 'bold 18px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(soVal, soX + siBoxW / 2, soY + 16);
 
-    // === Draw each FF + MUX ===
-    for (let i = 0; i < N_FF; i++) {
-      const fx = startX + i * (ffW + gap);
-      const mx = fx + (ffW - muxW) / 2;
-
-      // --- MUX ---
-      ctx.fillStyle = '#161b22';
-      ctx.strokeStyle = se ? scanColor : funcColor;
-      ctx.lineWidth = se ? 2.5 : 1.5;
+    // Last FF → SO line
+    ctx.strokeStyle = se ? scanColor : '#30363d';
+    ctx.lineWidth = se ? 2.8 : 1;
+    ctx.beginPath();
+    const lastCellR = startX + (N_FF - 1) * (cellW + gap) + cellW;
+    ctx.moveTo(lastCellR, siY);
+    ctx.lineTo(soX, siY);
+    ctx.stroke();
+    if (se) {
+      ctx.fillStyle = scanColor;
       ctx.beginPath();
-      ctx.moveTo(mx, muxY);           // top (D input)
-      ctx.lineTo(mx + muxW, muxY + muxH / 2); // right
-      ctx.lineTo(mx, muxY + muxH);    // bottom (scan input)
+      ctx.moveTo(soX, siY);
+      ctx.lineTo(soX + 8, siY - 5);
+      ctx.lineTo(soX + 8, siY + 5);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // === DFX cells ===
+    for (let i = 0; i < N_FF; i++) {
+      const cx = startX + i * (cellW + gap);
+      const val = ffVal(i);
+      const transitioning = isTransitioning(i);
+      const flash = transitioning && animT > 0.3 && animT < 0.7;
+
+      // cell background
+      ctx.fillStyle = '#161b22';
+      ctx.strokeStyle = flash ? flashColor : '#30363d';
+      ctx.lineWidth = flash ? 3 : 1.5;
+      ctx.beginPath();
+      roundRect(ctx, cx, cellY, cellW, cellH, 10);
+      ctx.fill(); ctx.stroke();
+
+      // cell label
+      ctx.fillStyle = '#484f58';
+      ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('DFX' + i, cx + cellW / 2, cellY + 14);
+
+      // --- MUX inside the cell ---
+      const muxW = 40, muxH = 28;
+      const muxX = cx + 10;
+      const muxY = cellY + 32;
+      // MUX trapezoid
+      ctx.fillStyle = '#0d1117';
+      ctx.strokeStyle = se ? scanColor : funcColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(muxX, muxY);                   // left-top (D)
+      ctx.lineTo(muxX + muxW, muxY + muxH * 0.35); // right
+      ctx.lineTo(muxX, muxY + muxH);             // left-bottom (SI)
       ctx.closePath();
       ctx.fill(); ctx.stroke();
-      // MUX label
       ctx.fillStyle = '#8b949e';
       ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('MUX', mx + muxW / 2 + 1, muxY + muxH / 2 + 3);
-      // selected input indicator
-      const selY = se ? muxY + muxH - 2 : muxY + 2;
+      ctx.fillText('MUX', muxX + muxW / 2 + 2, muxY + muxH / 2 + 3);
+
+      // selected input dot
+      const selDotY = se ? muxY + muxH - 4 : muxY + 4;
       ctx.fillStyle = se ? scanColor : funcColor;
       ctx.beginPath();
-      ctx.arc(mx + muxW / 2 + 10, selY, 3, 0, Math.PI * 2);
+      ctx.arc(muxX + muxW * 0.5, selDotY, 4, 0, Math.PI * 2);
       ctx.fill();
 
-      // MUX to FF connection
-      ctx.strokeStyle = '#8b949e';
-      ctx.lineWidth = 1.5;
+      // --- D input pin (top of cell) ---
+      const dPinX = cx + cellW * 0.38;
+      ctx.strokeStyle = se ? '#21262d' : funcColor;
+      ctx.lineWidth = se ? 1 : 2;
       ctx.beginPath();
-      ctx.moveTo(mx + muxW, muxY + muxH / 2);
-      ctx.lineTo(fx + ffW / 2, ffY);
+      ctx.moveTo(dPinX, cellY);
+      ctx.lineTo(dPinX, cellY - 26);
+      ctx.arc(dPinX - 8, cellY - 34, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#161b22';
+      ctx.beginPath();
+      ctx.arc(dPinX - 8, cellY - 34, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = se ? '#30363d' : funcColor;
+      ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(funcD[i], dPinX - 8, cellY - 30);
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText('D', dPinX - 8, cellY - 16);
+
+      // MUX → DFF connection
+      ctx.strokeStyle = '#8b949e';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(muxX + muxW, muxY + muxH / 2);
+      ctx.lineTo(cx + cellW - 22, muxY + muxH / 2);
       ctx.stroke();
 
-      // --- D Flip-Flop ---
-      const pulse = clockEdge;
-      const borderColor = pulse ? '#f0883e' : (ffs[i] ? '#3fb950' : '#30363d');
-      ctx.fillStyle = ffBody;
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = pulse ? 3 : 1.5;
+      // --- DFF inside the cell ---
+      const dffW = 54, dffH = 56;
+      const dffX = cx + cellW - dffW - 10;
+      const dffY = cellY + 32;
+      ctx.fillStyle = '#0d1117';
+      ctx.strokeStyle = flash ? flashColor : (val ? '#3fb950' : '#30363d');
+      ctx.lineWidth = flash ? 3 : (val ? 2 : 1.5);
       ctx.beginPath();
-      roundRect(ctx, fx, ffY, ffW, ffH, 8);
+      roundRect(ctx, dffX, dffY, dffW, dffH, 6);
       ctx.fill(); ctx.stroke();
 
-      // FF label
-      ctx.fillStyle = '#e6edf3';
-      ctx.font = 'bold 13px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      // DFF label
+      ctx.fillStyle = '#484f58';
+      ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('FF' + i, fx + ffW / 2, ffY + 24);
+      ctx.fillText('DFF', dffX + dffW / 2, dffY + 14);
 
-      // FF value
-      ctx.fillStyle = ffs[i] ? onColor : '#484f58';
-      ctx.font = 'bold 20px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-      ctx.fillText(ffs[i], fx + ffW / 2, ffY + 50);
+      // DFF value - big
+      const displayVal = flash ? animNewFfs[i] : val;
+      ctx.fillStyle = displayVal ? onColor : '#484f58';
+      ctx.font = 'bold 22px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(displayVal, dffX + dffW / 2, dffY + 44);
 
-      // CLK arrow
-      const clkX = fx + ffW / 2;
-      const clkY = ffY + ffH + 6;
-      ctx.fillStyle = pulse ? '#f0883e' : '#484f58';
+      // CLK pin (small triangle at bottom of DFF)
+      const clkPinX = dffX + dffW / 2;
+      const clkPinY = dffY + dffH;
+      const clkActive = animating && animT < 0.35;
+      ctx.fillStyle = clkActive ? '#f0883e' : '#484f58';
       ctx.beginPath();
-      ctx.moveTo(clkX - 5, clkY);
-      ctx.lineTo(clkX, clkY + 6);
-      ctx.lineTo(clkX + 5, clkY);
-      ctx.closePath();
-      ctx.fill();
-      if (pulse) {
-        ctx.fillStyle = '#f0883e';
-        ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-        ctx.fillText('↑', clkX, clkY + 18);
+      ctx.moveTo(clkPinX - 5, clkPinY);
+      ctx.lineTo(clkPinX, clkPinY + 8);
+      ctx.lineTo(clkPinX + 5, clkPinY);
+      ctx.closePath(); ctx.fill();
+
+      // scan chain connections between cells
+      if (i < N_FF - 1) {
+        // this FF Q → next FF MUX scan input
+        const qX = dffX + dffW / 2;
+        const qY = dffY + dffH;
+        const nextMuxX = cx + cellW + gap + 10;
+        const nextMuxBotY = cellY + 32 + muxH;
+
+        // Q output label
+        ctx.fillStyle = val ? onColor : '#484f58';
+        ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Q=' + val, qX, qY + 18);
+
+        // scan wire: this Q → next MUX scan input
+        ctx.strokeStyle = se ? scanColor : '#30363d';
+        ctx.lineWidth = se ? 2.5 : 1;
+        ctx.setLineDash(se ? [] : [4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(qX, qY + 24);
+        ctx.lineTo(qX, qY + 36);
+        ctx.lineTo(nextMuxX, qY + 36);
+        ctx.lineTo(nextMuxX, nextMuxBotY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // animated traveling dot on scan path
+        if (se && animating && transitionBits.includes(i) && animT > 0.25 && animT < 0.75) {
+          const localT = (animT - 0.25) / 0.5; // 0..1
+          const dotX = qX + (nextMuxX - qX) * localT;
+          const dotY = qY + 24 + (nextMuxBotY - (qY + 24)) * localT;
+          ctx.fillStyle = flashColor;
+          ctx.shadowColor = flashColor;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        if (se && i === 0 && animating && transitionBits.includes(0) && animT > 0.1 && animT < 0.5) {
+          // SI→FF0 dot
+          const lt = (animT - 0.1) / 0.4;
+          const dx = siX + siBoxW + (startX + 14 - (siX + siBoxW)) * lt;
+          ctx.fillStyle = flashColor;
+          ctx.shadowColor = flashColor;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(dx, siY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      } else {
+        // last FF Q
+        const qX = dffX + dffW / 2;
+        const qY = dffY + dffH;
+        ctx.fillStyle = val ? onColor : '#484f58';
+        ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Q=' + val + ' → SO', qX, qY + 18);
       }
     }
 
-    // === clock label ===
-    const clkLabX = startX + totalW / 2;
+    // === Step counter ===
     ctx.fillStyle = '#8b949e';
+    ctx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('时钟拍数: ' + stepCount, w - 20, h - 12);
+
+    // === Click hint on D values ===
+    ctx.fillStyle = '#30363d';
     ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CLK', clkLabX, ffY + ffH + 36);
-
-    // === Legend ===
-    const legX = startX;
-    const legY = ffY + ffH + 58;
-    ctx.font = '9px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textAlign = 'left';
-
-    ctx.fillStyle = funcColor;
-    ctx.fillRect(legX, legY - 8, 12, 12);
-    ctx.fillStyle = '#c9d1d9';
-    ctx.fillText('功能数据路径 (D→MUX→FF)', legX + 18, legY);
-
-    ctx.fillStyle = scanColor;
-    ctx.fillRect(legX + 200, legY - 8, 12, 12);
-    ctx.fillStyle = '#c9d1d9';
-    ctx.fillText('扫描链路径 (SI→FF→...→SO)', legX + 218, legY);
-
-    ctx.fillStyle = '#7ee787';
-    ctx.fillRect(legX + 400, legY - 8, 12, 12);
-    ctx.fillStyle = '#c9d1d9';
-    ctx.fillText('FF 当前值为 1', legX + 418, legY);
-
-    updateInfo();
+    ctx.fillText('点击 D 值可翻转', w / 2, cellY - 44);
   }
 
   function roundRect(c, x, y, w, h, r) {
@@ -429,7 +525,7 @@ h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
     se = +e.target.dataset.se;
     this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     e.target.classList.add('active');
-    draw();
+    draw(1);
   });
 
   document.getElementById('clk-step').addEventListener('click', clkTick);
@@ -450,41 +546,40 @@ h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 4px; }
     si = +e.target.dataset.si;
     this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     e.target.classList.add('active');
-    draw();
+    draw(1);
   });
 
   document.getElementById('speed-slider').addEventListener('input', function () {
     speed = +this.value;
-    if (autoRunning) {
-      clearInterval(autoTimer);
-      autoTimer = setInterval(clkTick, 1000 / speed);
-    }
+    if (autoRunning) { clearInterval(autoTimer); autoTimer = setInterval(clkTick, 1000 / speed); }
   });
 
   document.getElementById('reset-btn').addEventListener('click', reset);
 
-  // functional D inputs clickable
+  // click D values to toggle
   canvas.addEventListener('click', function (e) {
+    if (animating) return;
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const scaleX = canvas.clientWidth / (canvas.width / (Math.min(window.devicePixelRatio || 1, 2)));
-    // simplified: check if click is near a D label
-    const totalW = N_FF * (80 + 36) - 36;
+    const cellW = 150, gap = 20;
+    const totalW = N_FF * cellW + (N_FF - 1) * gap;
     const startX = (canvas.clientWidth - totalW) / 2;
+    const cellY = 110;
     for (let i = 0; i < N_FF; i++) {
-      const fx = startX + i * (80 + 36) + 18;
-      const fy = 160 - 50 - 26 - 26;
-      if (Math.abs(mx - fx) < 30 && Math.abs(my - fy) < 22) {
+      const cx = startX + i * (cellW + gap);
+      const dPinX = cx + cellW * 0.38;
+      const dPinY = cellY - 34;
+      if (Math.abs(mx - dPinX) < 18 && Math.abs(my - dPinY) < 16) {
         funcD[i] = funcD[i] ? 0 : 1;
-        draw();
+        draw(1);
         break;
       }
     }
   });
 
-  window.addEventListener('resize', draw);
-  draw();
+  window.addEventListener('resize', () => draw(animating ? 0.5 : 1));
+  draw(1);
 })();
 </script>
 </body>
