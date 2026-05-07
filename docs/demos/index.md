@@ -19,3 +19,12 @@
 - 支持左移 / 右移、逻辑填充 / 算术符号扩展 / 循环移位
 
 <a href="https://wangxiayuan.github.io/claude-code-verilog/barrel_shifter_demo.html" target="_blank">查看演示</a>
+
+## DFT 扫描链 (Scan Chain)
+
+展示可测试性设计（DFT）的核心机制 — 将触发器串联为移位寄存器。
+
+- **功能模式 (SE=0)**：触发器按正常路径工作，MUX 选择 D 输入端
+- **扫描移位 (SE=1)**：触发器串联为移位寄存器，SI → FF₀ → FF₁ → ... → SO
+
+<a href="https://wangxiayuan.github.io/claude-code-verilog/scan_chain_demo.html" target="_blank">查看演示</a>
