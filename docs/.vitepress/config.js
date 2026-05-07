@@ -10,7 +10,7 @@ export default defineConfig({
     nav: [
       { text: '指南', link: '/guide/getting-started' },
       { text: '心得笔记', link: '/notes/' },
-      { text: '动画演示', link: '/demos/' },
+      { text: '动画演示', link: '/demos/index' },
     ],
 
     sidebar: {
@@ -37,7 +37,7 @@ export default defineConfig({
         {
           text: '动画演示',
           items: [
-            { text: '所有演示', link: '/demos/' },
+            { text: '所有演示', link: '/demos/index' },
           ]
         }
       ]

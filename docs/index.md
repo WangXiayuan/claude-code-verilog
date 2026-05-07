@@ -37,6 +37,6 @@ features:
   - icon: 🎬
     title: 动画演示
     details: 通过交互式波形动画，直观理解数字 IC 设计中的 Clock Gate 毛刺问题
-    link: /demos/
+    link: /demos/index
     linkText: 查看演示
 ---
