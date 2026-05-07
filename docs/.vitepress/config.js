@@ -10,7 +10,7 @@ export default defineConfig({
     nav: [
       { text: '指南', link: '/guide/getting-started' },
       { text: '心得笔记', link: '/notes/' },
-      { text: '动画演示', link: '/clock_gate_demo.html' },
+      { text: '动画演示', link: 'https://wangxiayuan.github.io/claude-code-verilog/clock_gate_demo.html' },
     ],
 
     sidebar: {
