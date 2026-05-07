@@ -34,4 +34,9 @@ features:
     details: 记录实际使用中的踩坑、经验与最佳实践，持续积累知识库
     link: /notes/
     linkText: 浏览笔记
+  - icon: 🎬
+    title: 动画演示
+    details: 通过交互式波形动画，直观理解数字 IC 设计中的 Clock Gate 毛刺问题
+    link: /clock_gate_demo.html
+    linkText: 查看演示
 ---
